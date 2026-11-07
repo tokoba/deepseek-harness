@@ -17,6 +17,13 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import * as SessionLogDeepSeek from '../src/index.ts'
 import type { DeepSeekSessionLogExtension, DeepSeekSessionLogWireEvent, DeepSeekSessionLogWireSurfaceOp } from '../src/types.ts'
 
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+})
+
 const contexts: Context[] = []
 const SIGNAL = new AbortController().signal
 

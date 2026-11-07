@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +7,13 @@ import {
   ANONYMOUS_USER_ID_FILE_NAME,
   getOrCreateAnonymousUserId,
 } from '../src/index.ts'
+
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+})
 
 const dirs: string[] = []
 

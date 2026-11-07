@@ -1,0 +1,54 @@
+# .github/workflows/hardening.yml  — keep the privacy fork in sync with upstream and prove it on the wire.
+# Copy the kit into the fork as   hardening/   (egress-guard.ts, wire-test.ts, fork/*).
+name: hardened-upstream-sync
+on:
+  schedule: [{ cron: '17 3 * * *' }]
+  workflow_dispatch:
+  pull_request:
+permissions: { contents: write, pull-requests: write }
+jobs:
+  sync-harden-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '24' }
+      - run: corepack enable
+      - name: Merge upstream into a candidate branch
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name  hardening-bot
+          git config user.email hardening-bot@users.noreply.github.com
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git || true
+          git fetch upstream master --tags
+          git checkout -B hardening/candidate
+          git merge --no-edit upstream/master
+      - name: Re-apply hardening (fails on upstream drift)
+        run: node hardening/fork/apply-hardening.ts --strict
+      - name: Static gate — no shipped telemetry endpoint / identity header left in sources
+        run: |
+          ! grep -rnE "https?://[a-z0-9.-]*deepseeksvc\.com" packages --include=*.ts --include=*.yml \
+              | grep -v -e '/tests/' -e 'hardened-fetch.ts' -e '\.md:'
+          ! grep -rnE "'x-deepseek-harness-user-id'\s*:" packages/llm/llm-deepseek/src
+          grep -q "dsh-hardened\] gate DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD" packages/session/session-log-deepseek/src/index.ts
+          grep -q "dsh-hardened\] gate DSH_HARDENED_ALLOW_PLUGIN_INVENTORY" packages/llm/plugin-package-inventory-deepseek/src/index.ts
+          grep -q "dsh-hardened\] ephemeral-id" packages/identity/anonymous-user-id/src/index.ts
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Egress guard self-test
+        run: node hardening/egress-guard.selftest.ts
+      - name: Wire test — fork defaults WITHOUT env opt-outs, guard in audit mode (measures the build itself)
+        run: node hardening/wire-test.ts --cmd "pnpm dsh" --no-env-optout --guard audit --json wire-defaults.json
+      - name: Wire test — launcher configuration (env opt-outs + enforce)
+        run: node hardening/wire-test.ts --cmd "pnpm dsh" --guard enforce --json wire-enforce.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: wire-results, path: 'wire-*.json' }
+      - name: Open PR with the verified candidate
+        if: github.event_name != 'pull_request' && success()
+        run: |
+          git add -A && git commit -m "chore(hardening): re-apply privacy patches on upstream $(git rev-parse --short upstream/master)" || true
+          git push -f origin hardening/candidate
+          gh pr create --base master --head hardening/candidate --title "Upstream sync $(git rev-parse --short upstream/master) (hardened, wire-verified)" --body-file hardening/HARDENING-REPORT.json || true
+        env: { GH_TOKEN: '${{ github.token }}' }

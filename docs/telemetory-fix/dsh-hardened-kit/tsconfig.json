@@ -1,0 +1,2 @@
+{ "compilerOptions": { "target": "ES2023", "module": "NodeNext", "moduleResolution": "NodeNext", "strict": true, "noEmit": true, "allowImportingTsExtensions": true, "erasableSyntaxOnly": true, "skipLibCheck": true, "types": ["node"], "typeRoots": ["/opt/oai-docgen/node_modules/@types"], "lib": ["ES2023","DOM","DOM.Iterable"] },
+  "files": ["egress-guard.ts", "egress-guard.selftest.ts", "fork/apply-hardening.ts", "fork/hardened-fetch.ts", "wire-test.ts"] }

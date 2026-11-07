@@ -31,6 +31,15 @@ import * as Messages from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import * as AccountProvider from '@deepseek-ai/dsh-llm-deepseek-account'
 import { adapter, assemble, chunks, MODEL, options, prepareExtensions, server, sse, textEvents, user, sourceModuleLoader } from './helpers.ts'
 
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+  process.env.DSH_HARDENED_ALLOW_SESSION_HEADER = '1'
+  process.env.DSH_HARDENED_ALLOW_REQUEST_EXTENSIONS = '1'
+})
+
 const cleanup: (() => Promise<unknown>)[] = []
 afterEach(async () => {
   vi.useRealTimers()

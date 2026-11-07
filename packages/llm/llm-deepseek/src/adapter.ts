@@ -17,6 +17,7 @@ import { translate } from './translate.ts'
 import { providerError, providerErrorDetail } from './transport.ts'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { resolveRequestImageTarget } from './request-pricing.ts'
+import { hardenedFetch } from './hardened-fetch.ts'
 
 /** DeepSeek provider using Messages content and native thinking replay. */
 export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapter {
@@ -139,7 +140,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
             ? [MESSAGES_TOOL_CHANGES_BETA]
             : [],
         ]
-        const response = await fetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
+        const response = await hardenedFetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
           method: 'POST', signal, body: extensions.payload, redirect: 'error',
           headers: {
             ...attributionHeaders(),
@@ -147,7 +148,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
             ...auth.headers,
             'anthropic-version': '2023-06-01',
             ...betas.length === 0 ? {} : { 'anthropic-beta': betas.join(',') },
-            'x-deepseek-harness-user-id': this.dependencies.resolveUserId(),
+            ...process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID === '1' ? { 'x-deepseek-harness-user-id': this.dependencies.resolveUserId() } : {},
             ...options.sessionId === undefined ? {} : { 'x-deepseek-harness-session-id': String(options.sessionId) },
             ...requestIdentity.purpose === 'compaction' ? { 'x-deepseek-harness-compact': '1' } : {},
           },

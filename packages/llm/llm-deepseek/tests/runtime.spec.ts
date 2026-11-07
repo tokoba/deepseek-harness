@@ -32,6 +32,15 @@ import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import type { Behavior } from './mock-server.ts'
 import { requestImageStore } from './helpers.ts'
 
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+  process.env.DSH_HARDENED_ALLOW_SESSION_HEADER = '1'
+  process.env.DSH_HARDENED_ALLOW_REQUEST_EXTENSIONS = '1'
+})
+
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'test': { kind: 'test' } & ContextFormed

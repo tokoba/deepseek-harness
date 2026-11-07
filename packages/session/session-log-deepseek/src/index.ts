@@ -57,7 +57,7 @@ export interface Config {
 
 /** Validated Session-log request contribution configuration. */
 export const Config = z.object({
-  enabled: z.boolean().default(true).volatile(),
+  enabled: z.boolean().default(process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD === '1').volatile(),
   maxBytes: z.number().step(1).min(1).default(8 * 1024 * 1024),
 })
 
@@ -287,5 +287,10 @@ export class SessionLogDeepSeekService extends Service {
  * @returns fulfillment after the upload service is mounted.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  // [dsh-hardened] Only the process environment (=1) enables this request field; config, settings UI, and HMR cannot.
+  if (process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD !== '1') {
+    return
+  }
+
   await ctx.plugin(SessionLogDeepSeekService, config)
 }

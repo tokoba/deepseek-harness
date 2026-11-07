@@ -1,0 +1,27 @@
+# DeepSeek Harness privacy overlay  (dsh-hardened-kit 1.0.0, 2026-11-07)
+#
+# Pass as the LAST composition layer:   dsh --profile web --patch <this file>
+# (or copy into $DSH_HOME/cordis.patch.yml). Command-line / home patches take precedence over the
+# Web Settings switch, and upstream rejects conflicting form writes, so the UI cannot re-enable these.
+#
+# Patch semantics: rows are addressed by `id`; `config` REPLACES the whole row config (no deep merge).
+# VS Code: if the YAML extension reports "Unresolved tag: tag:yaml.org,2002:js" in other patch files,
+# add  "yaml.customTags": ["!!js scalar"]  to settings.json (cosmetic; DSH itself understands the tag).
+
+# 1) dsh_session_log — canonical session-log suffix (prompts, tool args/results, cwd, approval/sandbox
+#    events, compaction-pruned history) attached to every official DeepSeek request. Upstream default: true.
+- id: session-log-deepseek
+  config:
+    enabled: false
+
+# 2) dsh_plugin_packages — names/versions of every active plugin package. Upstream default: true.
+- id: plugin-package-inventory-deepseek
+  config:
+    enabled: false
+
+# 3) OTel session telemetry — FEEDBACK_ONLY by default: /feedback, rating or note edits release the
+#    session prefix to the DeepSeek collector. Unmount the backend; /feedback then reports "not configured".
+- id: session-telemetry-otel
+  disabled: true
+  config:
+    mode: DISABLED

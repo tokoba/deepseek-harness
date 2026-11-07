@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 /** Unversioned file plugins do not block Loader-composed DeepSeek requests. */
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,6 +12,13 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as PluginInventory from '../src/index.ts'
+
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+})
 
 let root: string | undefined
 let context: Context | undefined

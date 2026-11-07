@@ -85,7 +85,7 @@ export interface Config {
 export const Config = z.object({
   count: z.number().step(1).min(1).max(50).default(DEEPSEEK_DEFAULT_COUNT).volatile(),
   searchRequestsPerSecond: z.number().step(1).min(1).default(DEEPSEEK_SEARCH_REQUESTS_PER_SECOND).volatile(),
-  sendOriginalQuestion: z.boolean().default(true).volatile(),
+  sendOriginalQuestion: z.boolean().default(false).volatile(),
   searchBaseURL: z.string().volatile(),
   searchApiKeyEnv: z.string().role('credential-ref').volatile(),
   fetchBaseURL: z.string().volatile(),

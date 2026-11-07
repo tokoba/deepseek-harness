@@ -36,7 +36,7 @@ export interface Config {
 
 /** Validated plugin-package request contribution configuration. */
 export const Config: z<Config> = z.object({
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().default(process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY === '1'),
 })
 
 interface PackageManifest {
@@ -197,6 +197,11 @@ function collectActivePluginPackages(
  * @param config - validated default-on configuration.
  */
 export function apply(ctx: Context, config: Config): void {
+  // [dsh-hardened] Only the process environment (=1) enables this request field; config, settings UI, and HMR cannot.
+  if (process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY !== '1') {
+    return
+  }
+
   if (config.enabled === false) return
   const hostBaseUrl = ctx.baseUrl ?? import.meta.url
   const resolver = new PackageIdentityResolver(hostBaseUrl, ctx.get('pluginPackages'))

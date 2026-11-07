@@ -7,6 +7,7 @@
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { WebError } from '@deepseek-ai/dsh-web'
 
+import { hardenedFetch } from './hardened-fetch.ts'
 const USER_AGENT = 'deepseek-harness/0.0.1'
 
 /** Account token tried before the API key of an operation. */
@@ -138,7 +139,7 @@ export async function dispatchDeepSeekWeb<T>(
   let response: Response
   /* jscpd:ignore-start */
   try {
-    response = await fetch(endpoint, {
+    response = await hardenedFetch(endpoint, {
       method: 'POST',
       redirect: 'error',
       headers: {

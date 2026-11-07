@@ -3,6 +3,7 @@ import { APP_IDENTITY, attributionHeaders, LlmError } from '@deepseek-ai/dsh-llm
 import type { LlmModelBadge, LlmModelBadgeTone, ModelModality } from '@deepseek-ai/dsh-llm'
 import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 
+import { hardenedFetch } from './hardened-fetch.ts'
 const LISTED_MODALITIES = ['text', 'image'] as const satisfies readonly ModelModality[]
 const BADGE_TONES = ['neutral', 'info', 'success', 'warning'] as const satisfies readonly LlmModelBadgeTone[]
 const LANGUAGE_ID = /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/u
@@ -244,7 +245,7 @@ export async function requestModelListing(
   let response: Response
   let text: string
   try {
-    response = await fetch(url, {
+    response = await hardenedFetch(url, {
       method: 'GET', redirect: 'error', signal,
       headers: { ...attributionHeaders(), accept: 'application/json', ...headers },
     })

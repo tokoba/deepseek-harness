@@ -65,7 +65,7 @@ function readPersistedId(file: string): AnonymousUserId | undefined {
  * @param options - home-location and UUID-generation seams.
  * @returns the stable per-harness-home anonymous user id.
  */
-export function getOrCreateAnonymousUserId(options: AnonymousUserIdOptions = {}): AnonymousUserId {
+function upstreamGetOrCreateAnonymousUserId(options: AnonymousUserIdOptions = {}): AnonymousUserId {
   const file = join(resolveDshHome(undefined, options.env ?? process.env), ANONYMOUS_USER_ID_FILE_NAME)
   const cached = memo.get(file)
   if (cached !== undefined) return cached
@@ -97,4 +97,21 @@ export function getOrCreateAnonymousUserId(options: AnonymousUserIdOptions = {})
   }
   memo.set(file, id)
   return id
+}
+
+// [dsh-hardened] ephemeral-id
+let ephemeralUserId: AnonymousUserId | undefined
+
+/**
+ * Return the anonymous user id used by OTel `user.id`, feedback acknowledgements, and the
+ * `x-deepseek-harness-user-id` header. Unless `DSH_HARDENED_ALLOW_PERSISTENT_ID=1`, the id is a
+ * random per-process value that is never written to disk, so no identifier links separate runs.
+ * With the opt-in, the id is persisted in `$DSH_HOME/.anonymous-user-id` and reused across runs.
+ * @param options - home-location and UUID-generation seams.
+ * @returns the per-process id, or the persisted per-harness-home id with the opt-in.
+ */
+export function getOrCreateAnonymousUserId(options: AnonymousUserIdOptions = {}): AnonymousUserId {
+  if (process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID === '1') return upstreamGetOrCreateAnonymousUserId(options)
+  ephemeralUserId ??= (options.randomUUID ?? randomUUID)() as AnonymousUserId
+  return ephemeralUserId
 }

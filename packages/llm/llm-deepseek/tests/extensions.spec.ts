@@ -11,6 +11,15 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { adapter, assemble, options, sse, textEvents } from './helpers.ts'
 
+// These specs cover the opt-in upload behavior; the hardened build requires explicit environment opt-in.
+vi.hoisted(() => {
+  process.env.DSH_HARDENED_ALLOW_SESSION_LOG_UPLOAD = '1'
+  process.env.DSH_HARDENED_ALLOW_PLUGIN_INVENTORY = '1'
+  process.env.DSH_HARDENED_ALLOW_PERSISTENT_ID = '1'
+  process.env.DSH_HARDENED_ALLOW_SESSION_HEADER = '1'
+  process.env.DSH_HARDENED_ALLOW_REQUEST_EXTENSIONS = '1'
+})
+
 declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions' {
   interface DeepSeekLlmApiExtensionMap {
     dsh_messages_test: { value: string }
