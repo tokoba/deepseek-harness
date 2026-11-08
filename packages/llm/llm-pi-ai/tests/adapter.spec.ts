@@ -925,6 +925,26 @@ describe('provider profile lifecycle', () => {
     expect(server.requests[2]).not.toHaveProperty('output_config')
   })
 
+  it('omits the thinking parameter when no effort is selected on a model that cannot stop reasoning', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: anthropicTextEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'adaptive-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'anthropic-messages',
+          baseURL: server.url,
+          compat: { forceAdaptiveThinking: true },
+          models: [{ id: 'always-thinks', reasoningEfforts: { low: 'low', high: 'high' } }],
+        },
+      },
+    })
+    await assemble(ctx, { provider: 'adaptive-gateway', model: 'always-thinks', maxTokens: 64, messages: [] })
+    expect(server.requests[0]).not.toHaveProperty('thinking')
+  })
+
   it('accepts absent credentials for pi-ai ambient authentication', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'ambient-key')
     const server = await mockServer([{ events: textEvents }])

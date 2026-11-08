@@ -110,6 +110,10 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
 
+### 保持提示词 cache 热度
+
+`cacheRetention`（`none`、`short`、`long`）选择提供方 cache 生命周期；在 `anthropic-messages` 上，`long` 发送 `cache_control.ttl: "1h"`。路由还可以设置 `cacheWarmer`，且必须给出全部字段：`maxPingsPerIdle`、`dailyCreditBudget`、`minPrefixTokens`、`marginMs` 与 `pingMaxTokens`。会话的主请求（不带 `purpose`）在 `anthropic-messages` 模型上完成后，适配器在进程内存中保留该请求，并在 cache TTL（5 分钟，`long` 时为 1 小时）到期前 `marginMs` 以 `pingMaxTokens` 作为输出上限重发。每个空闲期的 ping 次数取 `maxPingsPerIdle` 与价格盈亏平衡次数 `floor((cacheWrite - cacheRead) / cacheRead)` 中较小者。进程内所有 ping 共享 `dailyCreditBudget`，按目录价格估算，1 credit = 0.01 美元。ping 是计费的提供方请求。该会话的任何请求都会取消其待发 ping，失败的 ping 会停止预热直到下一次主请求，ping 输出不会进入会话日志。插件以 info 级别记录每次 ping。
+
 ### 运行时更改配置
 
 每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。

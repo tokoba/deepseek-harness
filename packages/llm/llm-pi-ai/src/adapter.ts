@@ -28,6 +28,7 @@
 
 import type {
   Api,
+  AssistantMessageEvent,
   AuthContext,
   CredentialStore,
   Model,
@@ -36,6 +37,7 @@ import type {
   MutableModels,
   SimpleStreamOptions,
   ThinkingLevel,
+  Usage,
 } from '@earendil-works/pi-ai'
 import {
   attributionHeaders,
@@ -59,6 +61,7 @@ import type {
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
+import type { PiAiCacheWarmer } from './cache-warmer.ts'
 import { requestImageTarget, toPiContext } from './context.ts'
 import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
@@ -126,6 +129,28 @@ export interface PiAiAdapterOptions {
    * conversion because its stored replay state is unusable by this build.
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+  /**
+   * Prompt-cache keepalive owned by the plugin instance. Every request with a
+   * Session id cancels that Session's pending ping; a completed main request on
+   * a route with `cacheWarmer` configured arms a new one.
+   */
+  warmer?: PiAiCacheWarmer
+}
+
+/**
+ * Pass pi-ai events through unchanged while reporting the terminal usage.
+ * @param events - one request's pi-ai events.
+ * @param onDone - receives the usage of a `done` event.
+ * @returns the same events.
+ */
+async function* tapDoneUsage(
+  events: AsyncIterable<AssistantMessageEvent>,
+  onDone: (usage: Usage) => void,
+): AsyncIterable<AssistantMessageEvent> {
+  for await (const event of events) {
+    if (event.type === 'done') onDone(event.message.usage)
+    yield event
+  }
 }
 
 /** The two auth injectables a pi-ai collection is built with. */
@@ -457,14 +482,22 @@ export class PiAiAdapter extends LlmAdapter {
             maxBytes: profile.requestImageMaxBytes,
           },
         }, onReplayDegrade, updates.systemPromptUpdate === 'in-history')
-      const events = snapshot.models.streamSimple(model, context, {
+      const sessionKey = options.sessionId === undefined ? undefined : String(options.sessionId)
+      const warmer = this.config.warmer
+      const generation = sessionKey === undefined ? undefined : warmer?.begin(sessionKey)
+      const streamOptions: SimpleStreamOptions = {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
-        ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
-        signal: watchdog.signal,
+        ...sessionKey === undefined ? {} : { sessionId: sessionKey },
         headers: requestHeaders(profile.headers, options, model.baseUrl, this.config.prepareHeaders),
-      })
+      }
+      const sentAt = Date.now()
+      let completedUsage: Usage | undefined
+      const events = tapDoneUsage(
+        snapshot.models.streamSimple(model, context, { ...streamOptions, signal: watchdog.signal }),
+        (usage) => { completedUsage = usage },
+      )
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false
       try {
@@ -472,6 +505,21 @@ export class PiAiAdapter extends LlmAdapter {
           const result = await watchdog.next(iterator)
           if (result.done) {
             exhausted = true
+            // Only a main conversation request (no purpose) is the prefix the next human turn extends.
+            if (warmer !== undefined && sessionKey !== undefined && generation !== undefined
+              && options.purpose === undefined && profile.cacheWarmer !== undefined && completedUsage !== undefined) {
+              warmer.arm({
+                sessionId: sessionKey,
+                provider: options.provider,
+                stream: (target, piContext, piOptions) => snapshot.models.streamSimple(target, piContext, piOptions),
+                model,
+                context,
+                options: streamOptions,
+                usage: completedUsage,
+                config: profile.cacheWarmer,
+                sentAt,
+              }, generation)
+            }
             return
           }
           yield result.value

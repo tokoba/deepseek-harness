@@ -1952,7 +1952,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:251`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:260`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -2033,6 +2033,12 @@ export interface PiAiProviderProfile {
   thinkingBudgets?: ThinkingBudgets
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
+  /**
+   * Prompt-cache keepalive for this route's Anthropic-protocol models; absent
+   * disables it. Each ping is a billed request that resends the Session's last
+   * main request with a small output cap shortly before the cache TTL expires.
+   */
+  cacheWarmer?: PiAiCacheWarmerConfig
   /** Streaming transport preference. */
   transport?: Transport
   /** HTTP/provider SDK timeout in milliseconds. */
@@ -2213,6 +2219,20 @@ export interface PiAiCompatProfile {
 
 /** One request modality a pi-ai model may accept. */
 export type PiAiModality = Model<Api>['input'][number]
+
+/** Keepalive settings for one provider route; every field is required. */
+export interface PiAiCacheWarmerConfig {
+  /** Upper bound on pings between two real requests; the price break-even count may lower it. */
+  maxPingsPerIdle: number
+  /** Estimated AI Credits all pings of this process may spend per local calendar day. */
+  dailyCreditBudget: number
+  /** Smallest cached prefix, in input tokens, worth keeping warm. */
+  minPrefixTokens: number
+  /** How long before TTL expiry a ping is sent, in milliseconds. */
+  marginMs: number
+  /** Output cap of a ping request; it must satisfy the model's thinking constraints. */
+  pingMaxTokens: number
+}
 
 /**
  * Selectable reasoning efforts for one model: each key is a level the model

@@ -110,6 +110,10 @@ Exact-model metadata lists `reasoning.efforts` from least to greatest selectable
 
 For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
 
+### Keep the prompt cache warm
+
+`cacheRetention` (`none`, `short`, `long`) selects the provider cache lifetime; on `anthropic-messages`, `long` sends `cache_control.ttl: "1h"`. A route may also set `cacheWarmer` with every field: `maxPingsPerIdle`, `dailyCreditBudget`, `minPrefixTokens`, `marginMs`, and `pingMaxTokens`. After a Session's main request (one without `purpose`) completes on an `anthropic-messages` model, the adapter keeps that request in process memory and resends it with the output cap set to `pingMaxTokens` `marginMs` before the cache TTL (5 minutes, or 1 hour for `long`) expires. Pings per idle period stop at the smaller of `maxPingsPerIdle` and the price break-even count `floor((cacheWrite - cacheRead) / cacheRead)`. All pings in the process share `dailyCreditBudget`, estimated from catalog prices with 1 credit = USD 0.01. A ping is a billed provider request. Any request on the Session cancels its pending ping, a failed ping stops warming until the next main request, and ping output never reaches the Session log. The plugin logs each ping at info level.
+
 ### Change configuration at runtime
 
 Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.

@@ -42,6 +42,9 @@ import type {
   RouteCatalog,
 } from './catalog.ts'
 import { buildProvider, supportedProtocols } from './provider.ts'
+import type { PiAiCacheWarmerConfig } from './cache-warmer.ts'
+
+export type { PiAiCacheWarmerConfig } from './cache-warmer.ts'
 
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
@@ -169,6 +172,12 @@ export interface PiAiProviderProfile {
   thinkingBudgets?: ThinkingBudgets
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
+  /**
+   * Prompt-cache keepalive for this route's Anthropic-protocol models; absent
+   * disables it. Each ping is a billed request that resends the Session's last
+   * main request with a small output cap shortly before the cache TTL expires.
+   */
+  cacheWarmer?: PiAiCacheWarmerConfig
   /** Streaming transport preference. */
   transport?: Transport
   /** HTTP/provider SDK timeout in milliseconds. */
@@ -367,6 +376,13 @@ const profile = z.object({
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
   cacheRetention: z.union(['none', 'short', 'long']),
+  cacheWarmer: z.object({
+    maxPingsPerIdle: z.natural().min(1),
+    dailyCreditBudget: z.number().min(0),
+    minPrefixTokens: z.natural(),
+    marginMs: z.natural(),
+    pingMaxTokens: z.natural().min(1),
+  }),
   transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
   timeoutMs: z.natural(),
   websocketConnectTimeoutMs: z.natural(),
@@ -416,6 +432,35 @@ function rejectRemovedFields(provider: string, source: PiAiProviderProfile): voi
   }
 }
 
+/**
+ * Validate a keepalive section. Schemastery materializes an absent section as
+ * {}, so an empty one means disabled; a non-empty one must set every field.
+ * @param provider - route key, for diagnostics.
+ * @param warmer - the configured section.
+ * @returns the complete section, or undefined when keepalive is disabled.
+ */
+function resolveCacheWarmer(provider: string, warmer: Partial<PiAiCacheWarmerConfig> | undefined): PiAiCacheWarmerConfig | undefined {
+  if (warmer === undefined || Object.keys(warmer).length === 0) return undefined
+  const integer = (name: Exclude<keyof PiAiCacheWarmerConfig, 'dailyCreditBudget'>, min: number): void => {
+    const value = warmer[name]
+    if (value === undefined) {
+      throw new Error(`llm-pi-ai: provider "${provider}" cacheWarmer.${name} is required when cacheWarmer is set`)
+    }
+    if (!Number.isSafeInteger(value) || value < min) {
+      throw new Error(`llm-pi-ai: provider "${provider}" cacheWarmer.${name} must be an integer of at least ${min}`)
+    }
+  }
+  integer('maxPingsPerIdle', 1)
+  integer('minPrefixTokens', 0)
+  integer('marginMs', 0)
+  integer('pingMaxTokens', 1)
+  const budget = warmer.dailyCreditBudget
+  if (budget === undefined || !Number.isFinite(budget) || budget < 0) {
+    throw new Error(`llm-pi-ai: provider "${provider}" cacheWarmer.dailyCreditBudget must be set to a finite number of at least 0`)
+  }
+  return warmer as PiAiCacheWarmerConfig
+}
+
 /** Reject a profile header that Fetch cannot put on a provider request. */
 function assertValidHeaders(provider: string, headers: Readonly<Record<string, string>> | undefined): void {
   for (const [name, value] of Object.entries(headers ?? {})) {
@@ -457,6 +502,7 @@ export function resolveProfiles(
       throw new Error(`llm-pi-ai: provider "${provider}" has an empty displayName`)
     }
     assertValidHeaders(provider, source.headers)
+    const cacheWarmer = resolveCacheWarmer(provider, source.cacheWarmer)
     const streamIdleTimeoutMs = source.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS
     if (!Number.isFinite(streamIdleTimeoutMs)
       || streamIdleTimeoutMs <= 0
@@ -526,12 +572,13 @@ export function resolveProfiles(
       if (validation === 'strict' || !(error instanceof PiAiCatalogError)) throw error
       catalogError ??= error.message
     }
-    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
+    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, cacheWarmer: _cacheWarmer, ...rest } = source
     resolved.set(provider, {
       ...rest,
       provider,
       displayName,
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
+      ...cacheWarmer === undefined ? {} : { cacheWarmer },
       streamIdleTimeoutMs,
       maxRequestImageBytes,
       maxRequestImages,

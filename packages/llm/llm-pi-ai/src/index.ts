@@ -63,8 +63,9 @@ import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
-import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
+import { assertNever, deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
+import { PiAiCacheWarmer } from './cache-warmer.ts'
 import { authContextFrom, credentialStoreFrom } from './auth.ts'
 import { catalogProvider, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
@@ -82,6 +83,7 @@ export { Config } from './config.ts'
 export type {
   Options,
   PiAiCompatProfile,
+  PiAiCacheWarmerConfig,
   PiAiModality,
   PiAiModelOverride,
   PiAiModelProfile,
@@ -235,10 +237,28 @@ export function apply(ctx: Context, config: Config): void {
   // through `ctx` per call, so they stay correct across the collection rebuilds
   // a configuration change causes, and a sign-in survives one.
   const auth = { credentials: credentialStoreFrom(ctx), authContext: authContextFrom(ctx) }
+  const warmer = new PiAiCacheWarmer((report) => {
+    const route = `"${report.provider}/${report.model}" session ${report.sessionId}`
+    switch (report.kind) {
+      case 'ping':
+        ctx.logger.info(`llm-pi-ai cache warmer: ping on ${route} read ${report.cacheReadTokens} and wrote ${report.cacheWriteTokens} tokens (~${report.credits.toFixed(2)} credits)`)
+        return
+      case 'ping-failed':
+        ctx.logger.warn(`llm-pi-ai cache warmer: ping on ${route} failed and stopped until the next request: ${report.message}`)
+        return
+      case 'skipped':
+        ctx.logger.debug(`llm-pi-ai cache warmer: not warming ${route}: ${report.reason}`)
+        return
+      default:
+        assertNever(report)
+    }
+  })
+  ctx.effect(() => () => { warmer.dispose() })
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,
     auth,
+    warmer,
     prepareHeaders: (request, headers) => ctx.waterfall('llm-pi-ai/request-headers', request, headers, () => headers),
     resolveAttachments: () => ctx.get('attachments'),
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(

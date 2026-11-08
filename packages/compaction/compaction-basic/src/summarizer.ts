@@ -141,6 +141,13 @@ export async function summarizeWithLlm(
     )
   }
 
+  // A provider keys its prefix cache on the reasoning setting, so a summary on the
+  // conversation's own model reuses that model's warm prefix only with the same effort.
+  const reasoningEffort = latest !== undefined
+    && latest.provider === target.provider
+    && latest.model === target.model
+    ? latest.reasoningEffort
+    : undefined
   const assembler = new BlockAssembler()
   const messages: RequestMessage[] = [
     ...input.messages,
@@ -155,6 +162,7 @@ export async function summarizeWithLlm(
     messages,
     toolHistory: agent.session.toolHistory(),
     ...input.tools === undefined ? {} : { tools: [...input.tools] },
+    ...reasoningEffort === undefined ? {} : { reasoningEffort },
     maxTokens: config.maxTokens,
     sessionId: agent.session.id,
     purpose: 'compaction',
