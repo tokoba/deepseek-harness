@@ -57,7 +57,8 @@ function harness(result: () => AssistantMessageEvent[] = () => [DONE]) {
     calls.push(options)
     return (async function* () { yield* result() })()
   }
-  const warmer = new PiAiCacheWarmer(report => reports.push(report), clock)
+  const archived = new Set<string>()
+  const warmer = new PiAiCacheWarmer(report => reports.push(report), sessionId => archived.has(sessionId), clock)
   const config: PiAiCacheWarmerConfig = {
     maxPingsPerIdle: 2, dailyCreditBudget: 100, minPrefixTokens: 30_000, marginMs: 60_000, pingMaxTokens: 16,
   }
@@ -66,7 +67,7 @@ function harness(result: () => AssistantMessageEvent[] = () => [DONE]) {
     options: { cacheRetention: 'long', maxTokens: 8192 }, usage: usage(50_000), config, sentAt: clock.now(),
     ...overrides,
   })
-  return { clock, reports, calls, warmer, anchor, config }
+  return { clock, reports, calls, warmer, anchor, config, archived }
 }
 
 describe('cache warmer', () => {
@@ -122,6 +123,23 @@ describe('cache warmer', () => {
     expect(h.reports.at(-1)).toMatchObject({ kind: 'ping-failed', message: '400 bad' })
     await h.clock.advance(3_600_000)
     expect(h.calls).toHaveLength(1)
+  })
+
+  it('does not warm an archived Session and stops when the Session is archived while armed', async () => {
+    const h = harness()
+    h.archived.add('s')
+    h.warmer.arm(h.anchor(), h.warmer.begin('s'))
+    expect(h.reports.at(-1)).toMatchObject({ kind: 'skipped', reason: 'the Session is archived' })
+    expect(h.clock.pending()).toBe(0)
+    h.archived.delete('s')
+    h.warmer.arm(h.anchor(), h.warmer.begin('s'))
+    await h.clock.advance(3_600_000 - 60_000)
+    expect(h.calls).toHaveLength(1)
+    h.archived.add('s')
+    await h.clock.advance(3_600_000)
+    expect(h.calls).toHaveLength(1)
+    expect(h.reports.at(-1)).toMatchObject({ kind: 'skipped', reason: 'the Session is archived' })
+    expect(h.clock.pending()).toBe(0)
   })
 
   it('cancels everything on dispose', async () => {

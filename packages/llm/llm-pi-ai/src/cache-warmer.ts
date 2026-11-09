@@ -144,8 +144,16 @@ export class PiAiCacheWarmer {
   private spent = 0
   private disposed = false
 
+  /**
+   * @param report - receives every ping, failure, and skip.
+   * @param isArchived - whether a Session is archived; checked when a request
+   *   arms the warmer and again before each ping, so archiving stops warming
+   *   by the next scheduled ping without spending budget.
+   * @param clock - timers and calendar day.
+   */
   constructor(
     private readonly report: (report: CacheWarmerReport) => void,
+    private readonly isArchived: (sessionId: string) => boolean,
     private readonly clock: CacheWarmerClock = systemClock,
   ) {}
 
@@ -171,6 +179,7 @@ export class PiAiCacheWarmer {
     const skip = (reason: string): void => {
       this.report({ kind: 'skipped', sessionId: anchor.sessionId, provider: anchor.provider, model: anchor.model.id, reason })
     }
+    if (this.isArchived(anchor.sessionId)) return skip('the Session is archived')
     const ttl = cacheTtlMs(anchor)
     if (ttl === undefined) return skip('the protocol or cache retention has no keepalive')
     const prefix = anchor.usage.input + anchor.usage.cacheRead + anchor.usage.cacheWrite
@@ -209,6 +218,11 @@ export class PiAiCacheWarmer {
     const { anchor } = entry
     if (this.armed.get(anchor.sessionId) !== entry) return
     const base = { sessionId: anchor.sessionId, provider: anchor.provider, model: anchor.model.id }
+    if (this.isArchived(anchor.sessionId)) {
+      this.armed.delete(anchor.sessionId)
+      this.report({ ...base, kind: 'skipped', reason: 'the Session is archived' })
+      return
+    }
     const prefix = anchor.usage.input + anchor.usage.cacheRead + anchor.usage.cacheWrite
     const credits = pingCredits(anchor.model, prefix, anchor.config.pingMaxTokens)
     const day = this.clock.day()

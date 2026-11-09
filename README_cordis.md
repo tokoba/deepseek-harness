@@ -124,6 +124,7 @@ MCP サーバー shimai を追加する。追加されたツール (`mcp__shimai
 ```
 node docs/feat/cache-hit/cache-report.mjs --ttl-min 60
 node docs/feat/cache-hit/cache-report.mjs <sessionId先頭> --ttl-min 60 --detail
+node docs/feat/cache-hit/cache-report.mjs --ttl-min 60 --root /c/Users/tokob/.dsh/sessions   # 別ユーザーのシェルから実行する場合
 ```
 
 セッションログからリクエストごとの cache read / write を集計し、cold 化の原因 (ttl-expired / after-compaction / model-changed など) を表示する。

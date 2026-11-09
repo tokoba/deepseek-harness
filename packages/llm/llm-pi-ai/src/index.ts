@@ -63,6 +63,7 @@ import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-workspace'
 import { assertNever, deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
 import { PiAiCacheWarmer } from './cache-warmer.ts'
@@ -252,7 +253,7 @@ export function apply(ctx: Context, config: Config): void {
       default:
         assertNever(report)
     }
-  })
+  }, sessionId => ctx.get('workspaceRegistry')?.archivedSessionIds.some(id => id === sessionId) ?? false)
   ctx.effect(() => () => { warmer.dispose() })
   const adapter = new PiAiAdapter({
     profiles,

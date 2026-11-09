@@ -1,5 +1,6 @@
 // Prompt-cache report over DSH Session logs (~/.dsh/sessions/**/session.v4.jsonl.zstd).
-// Usage: node docs/feat/cache-hit/cache-report.mjs [sessionIdPrefix] [--ttl-min 60] [--detail]
+// Usage: node docs/feat/cache-hit/cache-report.mjs [sessionIdPrefix] [--ttl-min 60] [--root <dir>] [--detail]
+// --root defaults to <home>/.dsh/sessions of the user running node.
 // For every main request (assistant/message usage) and compaction summary it reports
 // cache read/write tokens, and classifies a request as cold when its cache read is below
 // half of the previous request's prefix. The cause is the first matching rule:
@@ -11,11 +12,18 @@ import zlib from 'node:zlib'
 import os from 'node:os'
 
 const args = process.argv.slice(2)
-const filter = args.find(arg => !arg.startsWith('--'))
+const valued = new Set(['--ttl-min', '--root'])
+const filter = args.find((arg, i) => !arg.startsWith('--') && !valued.has(args[i - 1]))
 const ttlMin = Number(args[args.indexOf('--ttl-min') + 1] ?? 5) || 5
 const ttlMs = (args.includes('--ttl-min') ? ttlMin : 5) * 60_000
 const detail = args.includes('--detail')
-const root = path.join(os.homedir(), '.dsh', 'sessions')
+const rootIndex = args.indexOf('--root')
+const root = rootIndex >= 0 ? args[rootIndex + 1] : path.join(os.homedir(), '.dsh', 'sessions')
+if (!fs.existsSync(root)) {
+  console.error(`sessions directory not found: ${root} (pass --root <dir>/.dsh/sessions)`)
+  process.exit(1)
+}
+console.log(`sessions: ${root}`)
 
 function files(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {

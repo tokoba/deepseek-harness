@@ -112,7 +112,9 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 保持提示词 cache 热度
 
-`cacheRetention`（`none`、`short`、`long`）选择提供方 cache 生命周期；在 `anthropic-messages` 上，`long` 发送 `cache_control.ttl: "1h"`。路由还可以设置 `cacheWarmer`，且必须给出全部字段：`maxPingsPerIdle`、`dailyCreditBudget`、`minPrefixTokens`、`marginMs` 与 `pingMaxTokens`。会话的主请求（不带 `purpose`）在 `anthropic-messages` 模型上完成后，适配器在进程内存中保留该请求，并在 cache TTL（5 分钟，`long` 时为 1 小时）到期前 `marginMs` 以 `pingMaxTokens` 作为输出上限重发。每个空闲期的 ping 次数取 `maxPingsPerIdle` 与价格盈亏平衡次数 `floor((cacheWrite - cacheRead) / cacheRead)` 中较小者。进程内所有 ping 共享 `dailyCreditBudget`，按目录价格估算，1 credit = 0.01 美元。ping 是计费的提供方请求。该会话的任何请求都会取消其待发 ping，失败的 ping 会停止预热直到下一次主请求，ping 输出不会进入会话日志。插件以 info 级别记录每次 ping。
+`cacheRetention`（`none`、`short`、`long`）选择提供方 cache 生命周期；在 `anthropic-messages` 上，`long` 发送 `cache_control.ttl: "1h"`。路由还可以设置 `cacheWarmer`，且必须给出全部字段：`maxPingsPerIdle`、`dailyCreditBudget`、`minPrefixTokens`、`marginMs` 与 `pingMaxTokens`。会话的主请求（不带 `purpose`）在 `anthropic-messages` 模型上完成后，适配器在进程内存中保留该请求，并在 cache TTL（5 分钟，`long` 时为 1 小时）到期前 `marginMs` 以 `pingMaxTokens` 作为输出上限重发。每个空闲期的 ping 次数取 `maxPingsPerIdle` 与价格盈亏平衡次数 `floor((cacheWrite - cacheRead) / cacheRead)` 中较小者。进程内所有 ping 共享 `dailyCreditBudget`，按目录价格估算，1 credit = 0.01 美元。ping 是计费的提供方请求。该会话的任何请求都会取消其待发 ping，失败的 ping 会停止预热直到下一次主请求，ping 输出不会进入会话日志。组合了 Workspace 注册表时，已归档的会话不会被预热；预热期间被归档的会话会在下一次计划 ping 时被移除，既不发送也不计入预算；取消归档后，直到该会话的下一次主请求才恢复预热。插件以 info 级别记录每次 ping。
+
+`dailyCreditBudget` 覆盖一个本地日历日，即 DSH 进程所在时区的 00:00 至 24:00。每个适配器用一个内存计数器记录当天已花费的 credits；进程启动时为 0，本地日期变化后的第一次 ping 时归零，因此重启 DSH 也会将其归零。每次 ping 前，预热器按目录价格加上该次 ping 的估算值 `(prefixTokens × cacheRead + pingMaxTokens × output) / 1,000,000 × 100` credits，其中 `prefixTokens` 是锚定请求的输入、cache 读取与 cache 写入 token 之和。若合计会超过锚定路由的 `dailyCreditBudget`，预热器不发送，记录 `dailyCreditBudget is exhausted`，并停止预热该会话直到其下一次主请求。估算值在发送时计入，ping 失败或被取消时不退回，ping 实际报告的用量也不会修正它。设置了 `cacheWarmer` 的路由共享该计数器，每次 ping 按其自身路由的 `dailyCreditBudget` 检查。真实对话请求从不计入预算。
 
 ### 运行时更改配置
 
