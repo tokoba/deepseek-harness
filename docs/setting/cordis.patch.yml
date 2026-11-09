@@ -1,0 +1,109 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+- id: ui-chat
+  name: "@deepseek-ai/dsh-client-ui-chat"
+  config:
+    transcriptView: detailed
+    performanceUsage: detailed
+- id: ui-settings
+  name: "@deepseek-ai/dsh-client-ui-settings"
+  config:
+    enabled: true
+- id: ui-settings-account
+  name: "@deepseek-ai/dsh-client-ui-settings-account"
+  config:
+    version: 1
+    step: done
+    usage: detailed
+    developerTools: true
+    purpose: null
+    process: standard
+    completion: api-key
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      github-copilot:
+        cacheRetention: long
+        # Prompt-cache keepalive (billed pings, 1 credit = USD 0.01). Up to 16 pings
+        # (~16 h) per idle period, each ~1 minute before the 1-hour TTL expires;
+        # at most 2000 credits (USD 20) per day across all sessions.
+        cacheWarmer:
+          maxPingsPerIdle: 16
+          dailyCreditBudget: 2000
+          minPrefixTokens: 30000
+          marginMs: 60000
+          pingMaxTokens: 16
+        modelOverrides:
+          # The installed catalog omits `off: null` for this model, so a request
+          # without an effort sends thinking {type: disabled}, which Copilot rejects.
+          claude-sonnet-5.5:
+            reasoningEfforts: { low: low, medium: medium, high: high, xhigh: xhigh, max: max }
+- id: ui-theme
+  name: "@deepseek-ai/dsh-client-ui-theme"
+  config:
+    preference: dark
+    fontSize: 12
+    terminalFontSize: 11
+    textFontFamily: '"HackGen Console"'
+    codeFontFamily: '"HackGen Console"'
+    terminalFontFamily: '"HackGen Console"'
+- insert:
+    - id: mcp-shimai
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: shimai
+        transport: stdio
+        command: shimai-mcp-v2.exe
+        args: []
+        env:
+          OPENAI_COMPAT_API_KEY: !!js process.env.OPENAI_COMPAT_API_KEY
+          OPENAI_COMPAT_BASE_URL_V2: !!js process.env.OPENAI_COMPAT_BASE_URL_V2
+          SHIMAI_LOG_DIR: .log
+          SHIMAI_LOG_FILE_ONLY: 'true'
+          SHIMAI_LOG_TO_FILE: 'true'
+- id: session-log-deepseek
+  config:
+    enabled: false
+# Trimming old tool results rewrites the middle of the conversation, which
+# invalidates the whole prompt cache (one ~720k-token rewrite observed). With it
+# disabled, context pressure is relieved by summarization instead.
+- id: tool-result-pruner
+  disabled: true
+# Compact earlier and keep a smaller verbatim tail: the per-request cache read of a
+# large prefix dominates cost. thresholdRatio uses provider-reported prompt size;
+# retainTokens uses the heuristic meter, which counts this Japanese/code-heavy
+# history at about 1/2.5 of real tokens (30000 ≈ 75k real tokens).
+- id: compaction-basic
+  config:
+    modelPolicies:
+      - provider: github-copilot
+        model: claude-opus-5.5
+        thresholdRatio: 0.4
+        retainTokens: 30000
+      - provider: github-copilot
+        model: claude-sonnet-5.5
+        thresholdRatio: 0.4
+        retainTokens: 30000
+      # 1,050,000-token window; OpenAI prefix caching (24h retention, no write premium).
+      - provider: github-copilot
+        model: gpt-6.1-sol
+        thresholdRatio: 0.4
+        retainTokens: 30000
+      # 1,048,576-token window.
+      - provider: github-copilot
+        model: gemini-4-argon
+        thresholdRatio: 0.4
+        retainTokens: 30000
+      # Window not yet observed in the logs, so retention scales with it
+      # (0.03 of a 1M window is about 30000 meter tokens).
+      - provider: github-copilot
+        model: gemini-3.8-flash
+        thresholdRatio: 0.4
+        retainRatio: 0.03
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: github-copilot
+    model: gpt-6.1-sol
