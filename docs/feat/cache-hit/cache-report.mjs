@@ -4,7 +4,8 @@
 // For every main request (assistant/message usage) and compaction summary it reports
 // cache read/write tokens, and classifies a request as cold when its cache read is below
 // half of the previous request's prefix. The cause is the first matching rule:
-// model-changed, effort-changed, compaction, ttl-expired (gap > TTL), otherwise
+// model-changed, effort-changed, compaction, tool-result-pruned (compaction/prune rewrote
+// earlier tool results), ttl-expired (gap > TTL), otherwise
 // prefix-or-provider (prefix changed before the last breakpoint, or the provider evicted).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -64,10 +65,12 @@ for (const file of files(root)) {
   let config = {}
   let prev
   let compacted = false
+  let pruned = false
   const rows = []
   for (const event of readLog(file)) {
     if (event.type === 'request/header') config = event.data?.header?.config ?? {}
     if (event.type === 'compaction/end') compacted = true
+    if (event.type === 'compaction/prune') pruned = true
     const isSummary = event.type === 'compaction/summary'
     const usage = event.type === 'assistant/message' ? event.data?.usage : isSummary ? event.data?.usage : undefined
     if (usage === undefined) continue
@@ -82,6 +85,7 @@ for (const file of files(root)) {
       else if (!isSummary && config.reasoningEffort !== prev.effort) cause = 'effort-changed'
       else if (isSummary) cause = 'compaction-request'
       else if (compacted) cause = 'after-compaction'
+      else if (pruned) cause = 'tool-result-pruned'
       else if (event.time - prev.time > ttlMs) cause = 'ttl-expired'
       else cause = 'prefix-or-provider'
     }
@@ -92,6 +96,7 @@ for (const file of files(root)) {
     if (cause !== undefined) { totals.cold++; totals.lostCredits += lost; totals.causes[cause] = (totals.causes[cause] ?? 0) + 1 }
     prev = { prefix, model, effort: config.reasoningEffort, time: event.time }
     compacted = false
+    pruned = false
   }
   if (rows.length === 0) continue
   const read = rows.reduce((sum, row) => sum + row.read, 0)
