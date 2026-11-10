@@ -161,6 +161,30 @@ export interface PiAiAuthInjection {
   authContext: AuthContext
 }
 
+/**
+ * Payload hook that sends the profile's `openaiPromptCacheTtl` as
+ * `prompt_cache_options: {mode: "implicit", ttl}` and drops
+ * `prompt_cache_retention`. The hook also runs for cache-warmer pings, which
+ * reuse these options, so a ping reads the same cache entry.
+ * @param profile - the resolved route profile.
+ * @param model - the request model.
+ * @returns an `onPayload` option, or nothing when the profile or protocol does not apply.
+ */
+export function openaiPromptCacheHook(
+  profile: Pick<ResolvedPiAiProviderProfile, 'openaiPromptCacheTtl' | 'cacheRetention'>,
+  model: Pick<Model<Api>, 'api'>,
+): Pick<SimpleStreamOptions, 'onPayload'> {
+  const ttl = profile.openaiPromptCacheTtl
+  if (ttl === undefined || model.api !== 'openai-responses' || profile.cacheRetention === 'none') return {}
+  return {
+    onPayload: (payload) => {
+      if (typeof payload !== 'object' || payload === null) return undefined
+      const { prompt_cache_retention: _retention, ...rest } = payload as Record<string, unknown>
+      return { ...rest, prompt_cache_options: { mode: 'implicit', ttl } }
+    },
+  }
+}
+
 /** Copy profile stream knobs into pi-ai's common option vocabulary. */
 function profileOptions(
   profile: ResolvedPiAiProviderProfile,
@@ -491,6 +515,7 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...sessionKey === undefined ? {} : { sessionId: sessionKey },
         headers: requestHeaders(profile.headers, options, model.baseUrl, this.config.prepareHeaders),
+        ...openaiPromptCacheHook(profile, model),
       }
       const sentAt = Date.now()
       let completedUsage: Usage | undefined

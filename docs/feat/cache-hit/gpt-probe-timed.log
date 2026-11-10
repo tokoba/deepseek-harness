@@ -1,0 +1,36 @@
+model=gpt-6.1-sol baseUrl=https://api.business.githubcopilot.com run=94880892 tokenExpires=2026-11-11T06:06:52.000Z
+
+[2026-11-10T22:16:29.141Z] X write  (3454 ms)  HTTP 200  prompt_cache_retention="24h"
+  status=completed incomplete=null
+  usage={"input_tokens":27598,"input_tokens_details":{"cache_write_tokens":27595,"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27603}
+  echoed={"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:16:32.409Z] Y write  (3266 ms)  HTTP 200  prompt_cache_retention="24h"
+  status=completed incomplete=null
+  usage={"input_tokens":27607,"input_tokens_details":{"cache_write_tokens":27604,"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27612}
+  echoed={"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:16:34.906Z] Z write (ttl=12h)  (2495 ms)  HTTP 200  prompt_cache_options={"mode":"implicit","ttl":"12h"}
+  status=completed incomplete=null
+  usage={"input_tokens":27600,"input_tokens_details":{"cache_write_tokens":27597,"cache_write_tokens_details":{"ttl_12h_tokens":27597,"ttl_30m_tokens":0},"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27605}
+  echoed={"prompt_cache_options":{"mode":"implicit","ttl":"12h"},"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:36:38.157Z] X ping at +20m (max_output_tokens=16)  (3243 ms)  HTTP 200  prompt_cache_retention="24h" max_output_tokens=16
+  status=completed incomplete=null
+  usage={"input_tokens":27598,"input_tokens_details":{"cache_write_tokens":0,"cached_tokens":27595},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27603}
+  echoed={"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:56:41.537Z] X real at +40m (pinged)  (3378 ms)  HTTP 200  prompt_cache_retention="24h"
+  status=completed incomplete=null
+  usage={"input_tokens":27598,"input_tokens_details":{"cache_write_tokens":0,"cached_tokens":27595},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27603}
+  echoed={"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:56:44.612Z] Y real at +40m (not pinged)  (3074 ms)  HTTP 200  prompt_cache_retention="24h"
+  status=completed incomplete=null
+  usage={"input_tokens":27607,"input_tokens_details":{"cache_write_tokens":27604,"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27612}
+  echoed={"prompt_cache_retention":"24h"}
+
+[2026-11-10T22:56:47.611Z] Z real at +40m (ttl=12h, not pinged)  (2997 ms)  HTTP 200  prompt_cache_options={"mode":"implicit","ttl":"12h"}
+  status=completed incomplete=null
+  usage={"input_tokens":27600,"input_tokens_details":{"cache_write_tokens":0,"cache_write_tokens_details":{"ttl_12h_tokens":0,"ttl_30m_tokens":0},"cached_tokens":27597},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":27605}
+  echoed={"prompt_cache_options":{"mode":"implicit","ttl":"12h"},"prompt_cache_retention":"24h"}

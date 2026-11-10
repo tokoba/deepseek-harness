@@ -44,6 +44,11 @@ import type {
 import { buildProvider, supportedProtocols } from './provider.ts'
 import type { PiAiCacheWarmerConfig } from './cache-warmer.ts'
 
+/** TTL values the OpenAI Responses `prompt_cache_options.ttl` field accepts. */
+export const OPENAI_PROMPT_CACHE_TTLS = ['30m', '12h'] as const
+/** One {@link OPENAI_PROMPT_CACHE_TTLS} value. */
+export type OpenAIPromptCacheTtl = typeof OPENAI_PROMPT_CACHE_TTLS[number]
+
 export type { PiAiCacheWarmerConfig } from './cache-warmer.ts'
 
 /** Default maximum idle interval while an adapter stream read is outstanding. */
@@ -172,6 +177,15 @@ export interface PiAiProviderProfile {
   thinkingBudgets?: ThinkingBudgets
   /** Prompt-cache retention preference. */
   cacheRetention?: CacheRetention
+  /**
+   * Prompt-cache TTL sent as `prompt_cache_options: {mode: "implicit", ttl}`
+   * on this route's `openai-responses` requests, replacing
+   * `prompt_cache_retention`; absent leaves pi-ai's own cache fields. Only
+   * GPT-5.6 and later models accept the field. `12h` writes cost twice the
+   * input price instead of 1.25 times and keep the prefix for at least 12 hours.
+   * Ignored when `cacheRetention` is `none`.
+   */
+  openaiPromptCacheTtl?: OpenAIPromptCacheTtl
   /**
    * Prompt-cache keepalive for this route's Anthropic-protocol models; absent
    * disables it. Each ping is a billed request that resends the Session's last
@@ -376,6 +390,7 @@ const profile = z.object({
   reasoning: z.union(THINKING_LEVELS),
   thinkingBudgets,
   cacheRetention: z.union(['none', 'short', 'long']),
+  openaiPromptCacheTtl: z.union(OPENAI_PROMPT_CACHE_TTLS),
   cacheWarmer: z.object({
     maxPingsPerIdle: z.natural().min(1),
     dailyCreditBudget: z.number().min(0),

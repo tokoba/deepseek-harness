@@ -26,6 +26,7 @@
     providers:
       github-copilot:
         cacheRetention: long
+        openaiPromptCacheTtl: 12h
         cacheWarmer:
           maxPingsPerIdle: 16
           dailyCreditBudget: 2000
@@ -133,3 +134,13 @@
 - id: terminal-controller
   config:
     environmentMode: inherit-user
+    shell:
+      path: 'C:/Program Files/Git/bin/bash.exe'
+      name: Git Bash
+      args:
+        - --login
+        - -i
+- id: dsh-context
+  name: dsh-context
+  config:
+    defaultOverviewRange: all
