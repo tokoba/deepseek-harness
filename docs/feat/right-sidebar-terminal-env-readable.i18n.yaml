@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for right-sidebar-terminal-env-readable.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/feat/right-sidebar-terminal-env-readable.md
+/:
+  en: adf83e99fa5f3b68
+  zh: bc4cdb04e46cb851
+/right-sidebar-terminal-environment-inheritance:
+  en: 872ba843533d1dc6
+  zh: 0096761d1bbcc4f3
+/right-sidebar-terminal-environment-inheritance/summary:
+  en: c5ed8205edc1ed09
+  zh: db4b1bf54066780a
+/right-sidebar-terminal-environment-inheritance/table-of-contents:
+  en: 85a173eb9872eddd
+  zh: ac084304f7a43b6a
+/right-sidebar-terminal-environment-inheritance/scope-and-current-evidence:
+  en: 0590f92da05ba8eb
+  zh: 25878ddfad475b51
+/right-sidebar-terminal-environment-inheritance/proposed-behavior:
+  en: 153db5a09ddc705a
+  zh: c5c6198a5edc973f
+/right-sidebar-terminal-environment-inheritance/implementation-responsibilities:
+  en: e636557daadd9f88
+  zh: 2781c687ed1959b5
+/right-sidebar-terminal-environment-inheritance/startup-files-and-windows-environment:
+  en: afc6c48a4bbe2966
+  zh: d5083048b5b42161
+/right-sidebar-terminal-environment-inheritance/security-and-alternatives:
+  en: 8fb2fee901f89051
+  zh: 839ae3186906e022
+/right-sidebar-terminal-environment-inheritance/acceptance-and-verification:
+  en: 2c6f5489a19be692
+  zh: 9cc58f7431a46e22
+/right-sidebar-terminal-environment-inheritance/delivery-sequence:
+  en: d5c29ec9815f7307
+  zh: a235e318215cf84c
+/right-sidebar-terminal-environment-inheritance/dev-note:
+  en: d63087aa763fe0d2
+  zh: 9060fda06e6eb090

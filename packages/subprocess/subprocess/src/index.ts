@@ -12,7 +12,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { proxyEnvironmentForChild } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_ENV_PREFIX } from './types.ts'
 import type { SubprocessHandle, SubprocessSpawnSpec } from './types.ts'
-import type { SubprocessTerminalEnvironment, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
+import type { SubprocessTerminalEnvironment, SubprocessTerminalEnvironmentMode, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
 
 export { DSH_ENV_PREFIX } from './types.ts'
 export type {
@@ -32,6 +32,7 @@ export type {
   SubprocessTerminalForeground,
   SubprocessTerminalActivity,
   SubprocessTerminalEnvironment,
+  SubprocessTerminalEnvironmentMode,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
@@ -40,15 +41,16 @@ export type {
 /**
  * Credential-shaped environment names are NOT forwarded to children (the
  * harness's own `DEEPSEEK_API_KEY`/secrets must not leak into a spawned
- * process implicitly). One heuristic for every in-repo spawner; a
- * deliberately supplied entry survives because explicit env layers merge
- * after the scrub.
+ * process implicitly). This is the default policy; a terminal may explicitly
+ * select `inherit-user`. A deliberately supplied entry survives because
+ * explicit env layers merge after the scrub.
  */
 export const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
 
 /**
  * The ambient parent environment minus credential-shaped names and minus all
- * `DSH_*` names — the canonical base every harness child starts from. `PATH`,
+ * `DSH_*` names — the default base for harness children. A terminal's explicit
+ * `inherit-user` policy uses `terminalParentEnv` instead. `PATH`,
  * `HOME`, locale, and proxy variables survive, so child CLIs run normally;
  * harness identity never leaks implicitly (a deliberately forwarded
  * credential or current `DSH_*` fact goes through the spec's explicit `env`,
@@ -64,9 +66,23 @@ export const SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i
  * @returns a fresh environment object safe to hand to a child spawn.
  */
 export function scrubbedParentEnv(): Record<string, string> {
+  return parentEnvironment('scrubbed')
+}
+
+/**
+ * Select a terminal's ambient environment while preserving proxy routing and excluding internal names.
+ * @param mode - `scrubbed` filters credential-shaped names; `inherit-user` deliberately retains them.
+ * @returns a fresh parent environment before explicit terminal overrides.
+ */
+export function terminalParentEnv(mode: SubprocessTerminalEnvironmentMode): Record<string, string> {
+  return parentEnvironment(mode)
+}
+
+function parentEnvironment(mode: SubprocessTerminalEnvironmentMode): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !SENSITIVE_ENV_PATTERN.test(key) && !key.toUpperCase().startsWith(DSH_ENV_PREFIX)) env[key] = value
+    if (value !== undefined && !key.toUpperCase().startsWith(DSH_ENV_PREFIX)
+      && (mode === 'inherit-user' || !SENSITIVE_ENV_PATTERN.test(key))) env[key] = value
   }
   // A child Node ignores the inherited proxy variables unless the flag this adds is set, so an MCP
   // stdio server or subagent CLI would connect directly while its parent proxies. The same overlay

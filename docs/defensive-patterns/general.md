@@ -213,7 +213,7 @@ async function dispatch(listeners: ((event: string) => Promise<void>)[], event: 
 
 ## Never hand untrusted output the ambient environment or predictable paths
 
-Spawned commands get a scrubbed env (drop `*KEY*`/`*SECRET*`/`*TOKEN*`/`*PASSWORD*`) so harness credentials cannot leak into output, `env`, or spill files. Temp/spill files use a private (0700) dir, random names, and exclusive owner-only opens (`'wx'`, `0o600`) — predictable world-readable paths invite symlink races and disclosure.
+Spawned commands default to a scrubbed env (drop `*KEY*`/`*SECRET*`/`*TOKEN*`/`*PASSWORD*`) to prevent implicit harness credential inheritance. A deployment may explicitly opt human-operated [sidebar terminals](../../packages/api/terminal-controller/README.md) into credential inheritance; agent tools and other consumers retain their existing filtered defaults. Temp/spill files use a private (0700) dir, random names, and exclusive owner-only opens (`'wx'`, `0o600`) — predictable world-readable paths invite symlink races and disclosure.
 
 The judged condition is whether spawned processes inherit the ambient environment or write somewhere another process can predict and replace. The boundary is trusted, in-process code with no external input, which the rule does not govern.
 

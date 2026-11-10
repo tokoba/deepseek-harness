@@ -295,7 +295,8 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     spec.signal?.throwIfAborted()
     const inspector = this.terminalInspector ?? createProcessInspector()
     const containmentMode = this.selectContainmentMode('terminal')
-    const env = targetEnvironment(spec)
+    const environmentMode = spec.environmentMode ?? 'scrubbed'
+    const env = targetEnvironment(spec, environmentMode)
     const platform = this.internals.platform ?? process.platform
     const activity = prepareShellActivity(spec, env, platform)
     const launch = activity === undefined ? spec : { ...spec, argv: activity.argv, env: activity.env }

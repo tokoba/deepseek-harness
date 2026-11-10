@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { SubprocessExecutableNotFoundError, type SubprocessRuntime, type SubprocessTerminalEnvironment, type SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessExecutableNotFoundError, type SubprocessRuntime, type SubprocessTerminalEnvironment, type SubprocessTerminalEnvironmentMode, type SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalController, type Config } from '../src/index.ts'
@@ -18,7 +18,9 @@ import type { TerminalInput, WebTerminalId } from '../src/types.ts'
 
 const roots: Context[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose())) })
-const config: Config = { shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100, unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 }
+// Loader input is unvalidated; the schema's declared type describes its normalized output.
+function parseConfig(input: unknown): Config { return TerminalController.Config(input as Parameters<typeof TerminalController.Config>[0]) }
+const config = parseConfig({ environmentMode: 'scrubbed', shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100, unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 })
 const id = 'test-terminal' as WebTerminalId
 const request = { id, cols: 80, rows: 24 }
 const signal = (): AbortSignal => new AbortController().signal
@@ -59,6 +61,36 @@ function fixture(overrides: Partial<Config> = {}) {
 }
 
 describe('TerminalController', () => {
+  it.each(['scrubbed', 'inherit-user'] as const)('passes the configured %s environment policy to the execution provider', async (environmentMode) => {
+    const parsed = parseConfig({ environmentMode })
+    const { controller, agent, subprocess } = fixture({ environmentMode: parsed.environmentMode })
+    await controller.create(agent, request, signal())
+    expect(subprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      environmentMode, env: { DSH_SESSION_ID: agent.id },
+    }))
+    await controller.close(agent, id)
+  })
+
+  it('samples an updated mode reference for new terminals without closing existing ones', async () => {
+    let current: SubprocessTerminalEnvironmentMode = 'scrubbed'
+    const environmentMode: Config['environmentMode'] = { get: () => current }
+    const { controller, agent, subprocess, handle } = fixture({ environmentMode })
+    const first = await controller.create(agent, request, signal())
+    expect(subprocess.spawnTerminal).toHaveBeenNthCalledWith(1, expect.objectContaining({ environmentMode: 'scrubbed' }))
+
+    current = 'inherit-user'
+    expect(handle.terminate).not.toHaveBeenCalled()
+    expect(await controller.create(agent, request, signal())).toBe(first)
+    expect(subprocess.spawnTerminal).toHaveBeenCalledOnce()
+    expect(controller.list(agent.id)).toMatchObject([{ id, state: 'running' }])
+
+    const secondId = 'new-mode-terminal' as WebTerminalId
+    await controller.create(agent, { ...request, id: secondId }, signal())
+    expect(subprocess.spawnTerminal).toHaveBeenNthCalledWith(2, expect.objectContaining({ environmentMode: 'inherit-user' }))
+    expect(handle.terminate).not.toHaveBeenCalled()
+    expect(controller.list(agent.id).map(terminal => terminal.id)).toEqual([id, secondId])
+  })
+
   it('resolves execution services from an Agent plugin context without consumer injections', async () => {
     const { ctx, controller } = fixture()
     let agent: Agent | undefined
@@ -486,9 +518,11 @@ describe('TerminalController', () => {
 
 describe('shell resolution', () => {
   it('accepts an omitted shell profile and defaults configured arguments to an empty list', () => {
-    // Loader input is unvalidated; the schema's declared type describes its normalized output.
-    const parse = (input: unknown): Config => TerminalController.Config(input as Config)
+    const parse = parseConfig
     expect(parse({}).shell).toBeUndefined()
+    expect(parse({}).environmentMode.get()).toBe('scrubbed')
+    expect(parse({ environmentMode: 'inherit-user' }).environmentMode.get()).toBe('inherit-user')
+    expect(() => parse({ environmentMode: 'inherit-everything' })).toThrow()
     expect(parse({})).toMatchObject({ unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 })
     expect(parse({ unattendedTimeoutMs: 0 }).unattendedTimeoutMs).toBe(0)
     for (const key of ['unattendedTimeoutMs', 'activityPollIntervalMs', 'cleanupRetryMs']) {

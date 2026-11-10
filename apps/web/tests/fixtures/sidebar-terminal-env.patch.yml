@@ -1,0 +1,8 @@
+- id: terminal-controller
+  config:
+    environmentMode: inherit-user
+    shellCandidates: [/bin/bash, /bin/sh]
+    shell:
+      path: /bin/bash
+      name: bash
+      args: [--noprofile, --norc, -i]

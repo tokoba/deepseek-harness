@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在任何于宿主机上运行子进程的组合中挂载 `dsh-subprocess-local`。它解析本地可执行文件，为普通 Linux 与 Windows 命令以及受支持的 Linux 终端会话提供由 OS 所有的受管范围，并通过 `node-pty` 提供真实终端会话；不受支持的宿主使用明确披露的较弱 fallback。它没有任何配置，因此每项处置方式、限制、终端尺寸与宽限期都随 spawn 请求来自调用方能力 seam。输出收集在内存中保留一段有界尾部，并可选地用 spill 文件恢复完整流；子进程从清理后的环境起步；dispose（资源释放）会终止并等待每个选定范围或会话完全停稳。
+在任何于宿主机上运行子进程的组合中挂载 `dsh-subprocess-local`。它解析本地可执行文件，为普通 Linux 与 Windows 命令以及受支持的 Linux 终端会话提供由 OS 所有的受管范围，并通过 `node-pty` 提供真实终端会话；不受支持的宿主使用明确披露的较弱 fallback。它没有任何配置，因此每项处置方式、限制、终端尺寸与宽限期都随 spawn 请求来自调用方能力 seam。输出收集在内存中保留一段有界尾部，并可选地用 spill 文件恢复完整流；子进程默认从清理后的环境起步；dispose（资源释放）会终止并等待每个选定范围或会话完全停稳。
 
 ## 目录
 
@@ -56,6 +56,8 @@ Windows 普通子进程通过 `windowsHide` 启动私有 Job runner，并为原�
 ### 运行终端会话
 
 `spawnTerminal` 分配真实 PTY 并桥接 UTF-8 文本；你可以检查当前前台进程组并向其发送信号，还可以等待一次 `terminate()` 操作。在受支持的 Linux 宿主上，原始终端 argv 直接在 user-systemd scope 内运行；node-pty PID、会话 leader、控制终端、前台 `inputWaiting` 与就绪状态保持不变，而 scope 会拥有已重新设定父进程或调用 `setsid` 的后代。在 fallback 宿主上，清理会保留根进程树和可观察会话中的精确身份，但无法重新发现每个已经逃逸的后代。Linux 的精确输入等待要求前台线程的 fd 0 标识 shell 的控制终端，且线程当前的 syscall 正在等待该 fd；如果内核拒绝 syscall 探测，上层 PTY 后端会改用空闲推断。在 Windows 上，SIGINT 以 Ctrl-C 输入写入投递，SIGTSTP 与 SIGHUP 不受支持，拆卸会通过进程表验证 shell 已终止，因为被外部终止的 shell 可能永远不会触发 PTY 退出通知。
+
+终端的 `environmentMode` 默认为 `scrubbed`。显式选择 `inherit-user` 会保留本宿主进程环境中形似凭据的名称，而两种模式都会在应用显式覆盖前移除父环境的 `DSH_*` 名称。Windows 按不区分大小写的规则合并覆盖名称。代理路由、最终环境验证及私有进程控制处理保持不变。每次新分配时选择环境；已有 shell 不接收之后的变更。此选项不刷新 Windows 注册表设置，也不改变启动文件参数，普通进程启动仍保留凭据过滤。
 
 使用 `shellActivity: true` 时，普通非登录的 `bash -i` 与 `zsh -i` 会安装私有生命周期记录，同时保留用户启动文件和提示符配置。Bash 需要 4.4 或更高版本，并允许写入提示符 hook；Zsh 观察空的顶层 ZLE 提示符，排除 `vared`、选择和续行提示符。输入、shell 状态迁移和进程观察变化都会推进活动 revision。前台、后台及停止的后代任务阻止空闲判断；原生 Linux 还要求 systemd scope 中恰好只有一个 task，覆盖进程树以外仍归其所有的工作；进程表扫描不完整、自定义 trap 和 Zsh 异步文件描述符 handler 会返回 unknown。进程表枚举失败会拒绝本次观察；活动保持 unknown，清理保留所有权，直到进程表可读并能完成验证。进程清理成功后删除私有文件。其他 shell、Windows、自定义参数以及经 sandbox 包装的可执行文件仍可使用，但活动为 unknown。
 
@@ -153,7 +155,7 @@ spill 文件以 `0600` 权限、`O_EXCL` 与随机名称在 `0700` 每进程目�
 - **Windows 终端分配依赖 node-pty 自带的控制台宿主资产**——每个 Windows 终端都以 `useConptyDll: true` 启动，分配时按 node-pty 自身 addon 的相对位置解析 `conpty/conpty.dll` 与 `OpenConsole.exe`；资产缺失或解包错误会让 `spawnTerminal` 抛错，而不是回退到操作系统控制台宿主。node-pty 把该选项标为实验性，升级 node-pty 可能改变这一行为。见[自带控制台宿主说明](../../../.agents/notes/implemented/bug-fix/2026-09-28-pty-bundled-console-host.zh.md)。
 - **fallback 终端 ownership 仍依赖观察**——在 macOS 或缺少可用 user-systemd 的 Linux 上，子进程如果在任何前台检查快照之前重新设定父进程，或离开自有终端会话，就可能逃出进程表扫描。本地提供方不会新增持续进程表监视器；受支持的 Linux native 模式改由 scope membership 持有这些后代。
 - **进程内清理要求退出阶段仍能执行 JavaScript**——直接 `process.exit()`、默认未捕获异常和默认未处理 rejection 会发出 Node 同步 `exit` 事件。未安装 handler 时，`SIGTERM`、`SIGINT` 或 `SIGHUP` 的默认 OS 处置不会发出该事件；应用只有安装执行正常 dispose 或调用 `process.exit()` 的 handler 才能覆盖这些信号。`SIGKILL`、fatal OOM、`process.abort()`、native crash、断电，以及任何无法运行 JavaScript 的故障，都需要外部 supervisor、容器 init 或等价的 OS owner 负责。
-- **凭据清除依赖名称启发式规则**——只匹配 `*KEY*`／`*PASSWORD*`／`*SECRET*`／`*TOKEN*`；名称不同的 secret（例如 `*PASSPHRASE*`）会继续传递，对误删变量引入白名单属于已记录的后续工作。
+- **默认凭据清除依赖名称启发式规则**——只匹配 `*KEY*`／`*PASSWORD*`／`*SECRET*`／`*TOKEN*`；名称不同的 secret（例如 `*PASSPHRASE*`）会继续传递。显式的终端 `inherit-user` 还会向 shell 及后代进程暴露匹配的凭据；两种模式均不阻止进程读取通过文件或启动脚本可获得的凭据。
 - **不会删除已完成的 spill 文件**——有界的完整输出恢复文件会在 OS tmpdir 下累积，直到外部机制进行清理；每进程私有 spill 目录仅在未持有任何已完成 spill 文件时于 JavaScript 可观察的退出阶段删除。
 - **被删除的 spill 目录不会重建**——每进程私有目录只创建一次；被外部清理工具删除后，该进程内之后的每次 spill 都降级为内存尾部并记录一条 `error`，直到宿主重启。在 `ENOENT` 时重新创建一个新的随机目录是待办工作。
 

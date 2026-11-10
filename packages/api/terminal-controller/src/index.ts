@@ -1,7 +1,8 @@
 /** Session-owned user terminals with the execution environment's system-user permissions. */
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { SubprocessTerminalEnvironmentMode } from '@deepseek-ai/dsh-subprocess'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-working-directory'
@@ -25,6 +26,8 @@ declare module '@deepseek-ai/cordis' {
 
 /** Deployment limits and an optional shell profile. */
 export interface Config {
+  /** Sidebar-only inheritance for new terminals; live updates preserve existing shells. Defaults to `scrubbed`. */
+  readonly environmentMode: Volatile<SubprocessTerminalEnvironmentMode>
   /** Explicit shell profile; omission uses the execution environment's default shell. */
   readonly shell?: {
     /** Executable path or PATH name, verified by the subprocess provider. */
@@ -75,10 +78,11 @@ interface OwnedSession {
 /** Typed Remote control of transient Session-owned terminal processes. */
 export class TerminalController extends TypertRemoteService {
   static inject = ['subprocess', 'sandboxPolicy', 'workingDirectory', 'typert']
-  static Config: z<Config> = z.object({
+  static Config = z.object({
     shell: z.union([z.object({
       path: z.string().required(), name: z.string().required(), args: z.array(z.string()).default([]),
     }), z.const(undefined)]),
+    environmentMode: z.union(['scrubbed', 'inherit-user'] as const).default('scrubbed').volatile(),
     shellCandidates: z.array(z.string().min(1)).default(['zsh', 'bash', 'fish', 'pwsh', 'powershell', 'cmd']),
     maxTerminals: z.number().step(1).min(1).default(8),
     maxCols: z.number().step(1).min(2).default(500),
@@ -320,6 +324,7 @@ export class TerminalController extends TypertRemoteService {
     const handle = await subprocess.spawnTerminal({
       argv: [shell.path, ...shell.args], cwd, cols: request.cols, rows: request.rows,
       terminalType: 'xterm-256color', env: { DSH_SESSION_ID: agent.id },
+      environmentMode: this.config.environmentMode.get(),
       shellActivity: true,
       graceMs: this.config.disposeGraceMs, signal,
     })

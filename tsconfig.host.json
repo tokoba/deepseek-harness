@@ -229,6 +229,7 @@
     "apps/web/tests/client-ui-stats-panel.e2e.ts",
     "apps/web/tests/sidebar-right.e2e.ts",
     "apps/web/tests/sidebar-terminal.e2e.ts",
+    "apps/web/tests/sidebar-terminal-environment.e2e.ts",
     "apps/web/tests/chat-scroll-fixture.ts",
     "apps/web/tests/chat-scroll-contract.e2e.ts",
     "apps/web/tests/chat-long-interactions.e2e.ts",

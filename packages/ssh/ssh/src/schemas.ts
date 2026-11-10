@@ -81,6 +81,7 @@ export const spawnSchema = z.object({
   terminal: z.object({
     terminalType: z.string().min(1), rows: z.number().int().positive(), cols: z.number().int().positive(),
     shellActivity: z.boolean().optional(),
+    environmentMode: z.enum(['scrubbed', 'inherit-user']).optional(),
   }).strict().optional(),
 }).strict().refine(value => (value.stdio === undefined) !== (value.terminal === undefined), 'select ordinary or terminal execution')
 /** Connection handshake binds sockets and workspace to one helper process. */

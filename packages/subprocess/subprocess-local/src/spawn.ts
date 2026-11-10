@@ -11,7 +11,7 @@
 import { type ChildProcess, type SpawnOptions, spawn, spawnSync } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { setTimeout as sleepMs } from 'node:timers/promises'
-import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
+import { terminalParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type {
   SubprocessCollect,
@@ -19,6 +19,7 @@ import type {
   SubprocessOutcome,
   SubprocessOutputMode,
   SubprocessSpawnSpec,
+  SubprocessTerminalEnvironmentMode,
 } from '@deepseek-ai/dsh-subprocess'
 import type { BoundProcessOwner, ManagedProcessLaunch } from './managed-owner.ts'
 import { waitWithAbort } from './managed-owner.ts'
@@ -34,15 +35,18 @@ type SpawnProcess = (
 ) => ChildProcess
 
 /**
- * Build a child environment: explicit caller entries override the scrubbed
+ * Build a child environment: explicit caller entries override the selected
  * parent base using the target platform's environment-key semantics. A string
  * deliberately restores or overrides an entry; an explicit `undefined`
  * tombstone removes an ordinary ambient entry.
- * @param extra - explicit caller entries and tombstones, merged after the scrub.
+ * @param extra - explicit caller entries and tombstones, merged after ambient selection.
+ * @param environmentMode - terminal ambient policy; omission keeps the ordinary credential scrub.
  * @returns the environment to hand to `spawn` for the child process.
  */
-export function childEnv(extra?: Readonly<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
-  const env = scrubbedParentEnv()
+export function childEnv(
+  extra?: Readonly<NodeJS.ProcessEnv>, environmentMode: SubprocessTerminalEnvironmentMode = 'scrubbed',
+): NodeJS.ProcessEnv {
+  const env = terminalParentEnv(environmentMode)
   if (process.platform !== 'win32') return { ...env, ...extra }
   let entries: [string, string | undefined][] = Object.entries(env)
   for (const [key, value] of Object.entries(extra ?? {})) {

@@ -26,9 +26,6 @@
     providers:
       github-copilot:
         cacheRetention: long
-        # Prompt-cache keepalive (billed pings, 1 credit = USD 0.01). Up to 16 pings
-        # (~16 h) per idle period, each ~1 minute before the 1-hour TTL expires;
-        # at most 2000 credits (USD 20) per day across all sessions.
         cacheWarmer:
           maxPingsPerIdle: 16
           dailyCreditBudget: 2000
@@ -36,10 +33,36 @@
           marginMs: 60000
           pingMaxTokens: 16
         modelOverrides:
-          # The installed catalog omits `off: null` for this model, so a request
-          # without an effort sends thinking {type: disabled}, which Copilot rejects.
           claude-sonnet-5.5:
-            reasoningEfforts: { low: low, medium: medium, high: high, xhigh: xhigh, max: max }
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+      zai:
+        baseURL: https://api.z.ai/api/anthropic
+        models:
+          - id: glm-5.3
+            name: GLM-5.3
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+              - image
+          - id: glm-5.3-highspeed
+            name: GLM-5.3 Highspeed
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+        apiKeyEnv: ZAI_API_KEY
 - id: ui-theme
   name: "@deepseek-ai/dsh-client-ui-theme"
   config:
@@ -107,3 +130,6 @@
   config:
     provider: github-copilot
     model: gpt-6.1-sol
+- id: terminal-controller
+  config:
+    environmentMode: inherit-user

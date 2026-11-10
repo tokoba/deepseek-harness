@@ -81,6 +81,20 @@ async function setup(options: {
 }
 
 describe('SSH terminal behavior', () => {
+  it.each(['scrubbed', 'inherit-user'] as const)('forwards %s to the remote terminal without forwarding ambient credentials', async (environmentMode) => {
+    onTestFinished(() => { vi.unstubAllEnvs() })
+    vi.stubEnv('SSH_TERMINAL_CLIENT_SECRET', 'client-only')
+    const test = await setup()
+    try {
+      const handle = await test.runtime.spawnTerminal({ ...spec, environmentMode })
+      expect(test.calls.find(call => call.method === 'process.prepare')?.params).toEqual({
+        argv: spec.argv, cwd: spec.cwd, env: undefined, graceMs: spec.graceMs,
+        terminal: { terminalType: spec.terminalType, rows: spec.rows, cols: spec.cols, shellActivity: undefined, environmentMode },
+      })
+      await handle.terminate()
+    } finally { await test.close() }
+  })
+
   it('publishes output and forwards terminal operations with remote process observations', async () => {
     const test = await setup()
     const handle = await test.runtime.spawnTerminal({ ...spec, env: { KEEP: 'value' } })

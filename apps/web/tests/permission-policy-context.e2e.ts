@@ -9,9 +9,11 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { canonicalPath } from '@deepseek-ai/dsh-sandbox'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { WebTerminalId } from '@deepseek-ai/dsh-api-terminal-controller/types'
 import type {} from '@deepseek-ai/dsh-api-terminal-controller'
 import {
@@ -72,10 +74,11 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
   const sessionEvents: SessionEvent[] = []
 
   beforeAll(async () => {
+    vi.stubEnv('SIDEBAR_REPLAY_SECRET', 'synthetic-replay-only')
     scaffold = await launchWebScaffold({
       ...MODE === 'record' ? {} : { replayFixture: FIXTURE, compareReplaySession: true },
       ...process.platform === 'win32' ? {} : {
-        extraOverlayPath: fileURLToPath(new URL('./fixtures/sidebar-terminal.patch.yml', import.meta.url)),
+        extraOverlayPath: fileURLToPath(new URL('./fixtures/sidebar-terminal-env.patch.yml', import.meta.url)),
       },
     })
     outsideWorkspace = await mkdtemp(join(tmpdir(), 'dsh-user-terminal-'))
@@ -96,6 +99,7 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     try { await browser?.close() } finally {
       disposeApproval?.()
       try { await scaffold?.close() } finally {
+        vi.unstubAllEnvs()
         if (outsideWorkspace !== undefined) await rm(outsideWorkspace, { recursive: true, force: true })
       }
     }
@@ -124,6 +128,16 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
     await page.keyboard.press('Enter')
     await expect.poll(() => readFile(join(sessionWorkspace!, 'terminal-access.txt'), 'utf8')).toBe(preset)
     await expect.poll(() => readFile(outsideFile, 'utf8')).toBe(preset)
+    await page.keyboard.insertText('printf "FILTERED=%s\\n" "${SIDEBAR_REPLAY_SECRET-absent}"')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.locator('.xterm-rows:visible').innerText()).toContain('FILTERED=synthetic-replay-only')
+    const probe = await executeToolFixture(scaffold.ctx, {
+      agent, callId: ToolCallId(`sidebar-env-${preset}`), name: 'bash',
+      arguments: { command: 'printf "AGENT_FILTERED=%s\\n" "${SIDEBAR_REPLAY_SECRET-absent}"', description: 'Check synthetic credential isolation in agent shell' },
+      signal: new AbortController().signal,
+    })
+    expect(probe.isError).not.toBe(true)
+    expect(probe.content.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('AGENT_FILTERED=absent')
     expect(sessionEvents).toHaveLength(beforeInput)
     await page.keyboard.insertText('rm terminal-access.txt')
     await page.keyboard.press('Enter')

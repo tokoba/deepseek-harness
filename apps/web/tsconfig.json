@@ -224,6 +224,7 @@
     "tests/client-ui-stats-panel.e2e.ts",
     "tests/sidebar-right.e2e.ts",
     "tests/sidebar-terminal.e2e.ts",
+    "tests/sidebar-terminal-environment.e2e.ts",
     "tests/startup-auto-selection.e2e.ts",
     "tests/changed-files-turn.e2e.ts",
     "tests/produced-file-mentions.e2e.ts",

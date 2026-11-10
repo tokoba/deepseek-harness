@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`ctx.subprocess` resolves executables, starts explicitly specified child processes or real terminal sessions, streams or collects bounded output, and terminates the full managed process range. Configure one subprocess implementation for each composition, choosing local or remote execution according to where commands must run. Each request sets argv, working directory, stdio, environment overrides, termination grace, and cancellation, with no shell interpretation or hidden execution defaults. Child environments remove ambient credentials and `DSH_*` values before applying explicit overrides; callers own deadlines, teardown policy, and model-facing rendering, while collected output remains readable after exit.
+`ctx.subprocess` resolves executables, starts explicitly specified child processes or real terminal sessions, streams or collects bounded output, and terminates the full managed process range. Configure one subprocess implementation for each composition, choosing local or remote execution according to where commands must run. Each request sets argv, working directory, stdio, environment overrides, termination grace, and cancellation, with no shell interpretation or hidden execution defaults. Child environments default to removing ambient credentials and `DSH_*` values before applying explicit overrides; terminals can explicitly inherit credentials. Callers own deadlines, teardown policy, and model-facing rendering, while collected output remains readable after exit.
 
 ## Table of Contents
 
@@ -77,7 +77,7 @@ A terminal request can opt into `shellActivity`. `inspectActivity()` combines su
 
 ### Environment every child starts from
 
-Children never inherit the harness's ambient secrets: credential-shaped names and ambient `DSH_*` facts are scrubbed, and the caller's explicit `env` merges after that scrub. A deliberately forwarded credential or a current `DSH_*` deployment fact still reaches the child; an explicit `undefined` tombstone removes an ordinary ambient entry.
+Ordinary processes and terminals that omit `environmentMode` or select `scrubbed` remove credential-shaped names and ambient `DSH_*` facts before merging explicit `env`. A terminal can deliberately select `inherit-user` to retain credential-shaped names from its execution provider's parent environment; ambient `DSH_*` names remain excluded. This choice applies only to terminal allocation and does not change ordinary process or other consumers' defaults. Explicit credentials and current `DSH_*` deployment facts still reach the child; ordinary process overrides also accept an `undefined` tombstone to remove an ambient entry. The shared `scrubbedParentEnv` helper retains its filtered behavior.
 
 ### What can go wrong
 

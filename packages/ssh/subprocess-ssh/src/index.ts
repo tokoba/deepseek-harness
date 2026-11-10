@@ -294,7 +294,10 @@ export class SshSubprocessRuntime extends SubprocessRuntime {
     const ssh = this.ctx.ssh
     const prepared = await ssh.request('process.prepare', {
       argv: spec.argv, cwd: spec.cwd, env: environment(spec.env), graceMs: spec.graceMs,
-      terminal: { rows: spec.rows, cols: spec.cols, terminalType: spec.terminalType, shellActivity: spec.shellActivity },
+      terminal: {
+        rows: spec.rows, cols: spec.cols, terminalType: spec.terminalType, shellActivity: spec.shellActivity,
+        environmentMode: spec.environmentMode,
+      },
     }, preparedSchema, signal)
     const id = prepared.id
     let socket: Socket | undefined

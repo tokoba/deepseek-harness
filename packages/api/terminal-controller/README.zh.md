@@ -27,10 +27,11 @@ kind: "package-reference"
 
 Web bundle 将此包与 subprocess provider、working-directory 服务、sandbox policy 和 Typert Gateway 一起挂载。`remote.terminal` 提供 `environment`、`shells`、`list`、`create`、`retain`、`attach`、`rename` 和 `close`；每个操作均按 Session 标识限定范围。列表直接读取 Host 保留的终端，因此查看离线 Session 不会激活 Agent，也不会产生恢复错误。
 
-Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provider 未声明默认值时，才在 POSIX 使用 `/bin/sh`，在 Windows 使用 `cmd.exe`。可选的 `shell` profile 通过可执行路径 `path`、显示名称 `name` 和参数 `args`（默认 `[]`）覆盖这一选择。选择器还会通过执行 provider 探测 `shellCandidates`，并省略确定未找到的候选。同一可执行文件名（不区分大小写，忽略 `.exe`）只列出最早的一项，因为 PATH 查找可能经由其他目录找到默认 shell，例如 merged-`/usr` 系统上 `/bin/bash` 对应的 `/usr/bin/bash`。创建请求接受探测返回的 `shellPath` 并再次验证；解析或传输失败会直接报告，不启动其他 shell。环境查询读取当前目录和限制，不校验文件系统或解析 shell，因此目录或默认 shell 不可用时仍可重新连接已有进程。POSIX 自动 profile 以交互模式启动，PowerShell 使用 `-NoLogo`，补全和启动配置仍由 shell 提供。新终端启动前通过[工作目录服务](../../session/working-directory/README.zh.md)校验当前目录，并采用该服务的恢复行为。已有终端保留其进程目录。用户终端使用执行环境中系统用户的权限，独立于 Agent 的沙箱模式和审批策略。操作系统和容器的限制仍然生效；DSH 不提升用户权限。Subprocess provider 继续清除环境中的凭据变量。
+Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provider 未声明默认值时，才在 POSIX 使用 `/bin/sh`，在 Windows 使用 `cmd.exe`。可选的 `shell` profile 通过可执行路径 `path`、显示名称 `name` 和参数 `args`（默认 `[]`）覆盖这一选择。选择器还会通过执行 provider 探测 `shellCandidates`，并省略确定未找到的候选。同一可执行文件名（不区分大小写，忽略 `.exe`）只列出最早的一项，因为 PATH 查找可能经由其他目录找到默认 shell，例如 merged-`/usr` 系统上 `/bin/bash` 对应的 `/usr/bin/bash`。创建请求接受探测返回的 `shellPath` 并再次验证；解析或传输失败会直接报告，不启动其他 shell。环境查询读取当前目录和限制，不校验文件系统或解析 shell，因此目录或默认 shell 不可用时仍可重新连接已有进程。POSIX 自动 profile 以交互模式启动，PowerShell 使用 `-NoLogo`，补全和启动配置仍由 shell 提供。新终端启动前通过[工作目录服务](../../session/working-directory/README.zh.md)校验当前目录，并采用该服务的恢复行为。已有终端保留其进程目录。用户终端使用执行环境中系统用户的权限，独立于 Agent 的沙箱模式和审批策略。操作系统和容器的限制仍然生效；DSH 不提升用户权限。Subprocess provider 默认过滤继承的凭据名称；`environmentMode` 仅控制侧栏终端的这一策略。
 
 | 配置 | 默认值 | 含义 |
 |---|---|---|
+| `environmentMode` | `scrubbed` | 过滤父环境凭据，或通过 `inherit-user` 显式保留；内部 `DSH_*` 名称仍保持隔离 |
 | `shell` | 省略 | 使用执行环境默认 shell，或指定一个 profile |
 | `shellCandidates` | `zsh`、`bash`、`fish`、`pwsh`、`powershell`、`cmd` | 已安装时供用户选择的额外可执行名称或路径 |
 | `maxTerminals` | `8` | 每个 Session 保留的终端和创建请求上限 |
@@ -42,6 +43,18 @@ Shell 探测结果首先列出执行环境声明的默认 shell。仅当 provide
 | `unattendedTimeoutMs` | `7200000` | 无窗口持有且持续确认空闲后开始清理的时长；`0` 禁用自动回收 |
 | `activityPollIntervalMs` | `30000` | 无窗口持有时的活动观察间隔 |
 | `cleanupRetryMs` | `60000` | 清理失败后的重试间隔 |
+
+要启用凭据继承，请在 profile 的 `cordis.patch.yml` 中设置 `terminal-controller` 行：
+
+```yaml
+- id: terminal-controller
+  config:
+    environmentMode: inherit-user
+```
+
+补丁会替换该行完整的 `config`；在替换配置中保留已有的 shell 或限制覆盖值。省略字段由 schema 默认值补齐。该模式属于部署配置，而非浏览器输入或 agent 工具参数。`inherit-user` 会向 shell、启动脚本及后代进程暴露执行主机的父环境凭据，包括模型提供方 API 密钥；SSH 使用远端 helper 的环境，而非 Web Host 的环境。在添加显式 Session 身份前，父环境的 `DSH_*` 名称仍被排除。Agent 工具、MCP、LSP 和 subagent 策略保持不变。
+
+环境继承在分配时固定；配置变更不能改写运行中 shell 的环境。应用配置后打开新终端，才能使用新策略。Shell 启动文件选择与之独立：此设置不强制加载登录配置，也不会让 cmd 和 PowerShell 读取 Bash 启动文件。在 Windows 上，它继承 Host 已有的进程环境，而非之后的注册表变更；修改 Windows 环境设置后，应重启完整的 Desktop/Host 进程。终端输出仍不自动进入模型历史，但终端命令及复制的输出仍可能泄露凭据。
 
 任何已连接窗口中的打开标签页都会持有其终端，包括隐藏标签和非当前 Session。最后一个持有关系消失后，只有明确确认空闲的时间才计入回收期限。运行中、停止、等待输入和后台执行的任务都会受到保护；活动状态未知时清除空闲截止时间。任务完成后重新给予完整宽限期。Host 使用单调时钟，在清理前重新检查持有关系和当前活动；观察间隔超过轮询周期的两倍时丢弃旧证据。时间字段使用毫秒和安全整数，轮询及重试间隔必须为正数。
 

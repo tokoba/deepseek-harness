@@ -92,12 +92,15 @@ describe.skipIf(process.platform === 'win32')('SSH helper process settlement', (
       for (let index = 0; index < 5; index++) {
         const child = terminal()
         test.spawnTerminal.mockResolvedValueOnce(child.handle)
-        const run = await test.prepare({ ...terminalRequest, env: { PRESENT: 'value', REMOVED: null } })
+        const environmentMode = index % 2 === 0 ? 'scrubbed' : 'inherit-user'
+        const run = await test.prepare({ ...terminalRequest, env: { PRESENT: 'value', REMOVED: null },
+          terminal: { ...terminalRequest.terminal, environmentMode },
+        })
         ids.push(run.id)
         run.channels.terminal!.end()
         run.channels.terminal!.resume()
         expect(await test.owner.start(run.id)).toEqual({ pid: 42 })
-        expect(test.spawnTerminal).toHaveBeenLastCalledWith(expect.objectContaining({ env: { PRESENT: 'value' }, rows: 24, cols: 80 }))
+        expect(test.spawnTerminal).toHaveBeenLastCalledWith(expect.objectContaining({ env: { PRESENT: 'value' }, rows: 24, cols: 80, environmentMode }))
         await expect(test.owner.start(run.id)).rejects.toThrow('already requested')
         await test.owner.terminal(run.id, 'write', 'input')
         expect(child.write).toHaveBeenCalledWith('input')

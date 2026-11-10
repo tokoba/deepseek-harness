@@ -34,6 +34,43 @@ it('validates remote shell facts and distinguishes a lookup miss from transport 
   } finally { await ctx.fiber.dispose() }
 })
 
+it.skipIf(process.platform === 'win32').each([undefined, 'scrubbed', 'inherit-user'] as const)('resolves %s inheritance from the real helper environment, not the client', async (environmentMode) => {
+  const { createHelperHarness } = await import('../../ssh/tests/fixtures/helper.ts')
+  const helper = await createHelperHarness()
+  const ctx = new Context()
+  const credential = 'SSH_TERMINAL_PROVIDER_SECRET'
+  vi.stubEnv(credential, 'client-value')
+  vi.stubEnv('dsh_terminal_remote_internal', 'stale')
+  ctx.provide('ssh', {
+    ...helper.connection,
+    request: <T>(method: string, params: unknown, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> => {
+      // The in-process helper shares process.env; switch it only when the remote request is admitted.
+      if (method === 'process.prepare') vi.stubEnv(credential, 'remote-value')
+      return helper.connection.request(method, params, schema, signal)
+    },
+  } as never)
+  const runtime = new SshSubprocessRuntime(ctx)
+  try {
+    const script = `process.stdout.write('REMOTE:'+JSON.stringify([process.env.${credential}??null,process.env.dsh_terminal_remote_internal??null]))`
+    const terminal = await runtime.spawnTerminal({
+      argv: [process.execPath, '-e', script], cwd: helper.root, cols: 200, rows: 24,
+      terminalType: 'dumb', graceMs: 100,
+      ...environmentMode === undefined ? {} : { environmentMode },
+    })
+    let output = ''
+    const drained = (async () => { for await (const chunk of terminal.output) output += String(chunk) })()
+    expect(await terminal.done).toEqual({ exitCode: 0, signal: null })
+    await drained
+    await terminal.terminate()
+    expect(output).toContain('REMOTE:' + JSON.stringify([environmentMode === 'inherit-user' ? 'remote-value' : null, null]))
+    expect(output).not.toContain('client-value')
+  } finally {
+    try { await ctx.fiber.dispose() } finally {
+      try { await helper.close() } finally { vi.unstubAllEnvs() }
+    }
+  }
+})
+
 it.skipIf(process.platform === 'win32')('queries the real helper and resizes its PTY without replacing the shell', async () => {
   const { createHelperHarness } = await import('../../ssh/tests/fixtures/helper.ts')
   const helper = await createHelperHarness()

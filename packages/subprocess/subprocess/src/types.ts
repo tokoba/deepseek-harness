@@ -210,14 +210,19 @@ export interface SubprocessTerminalEnvironment {
   defaultShell?: string
 }
 
+/** Ambient environment policy for a terminal process; internal `DSH_*` names never inherit implicitly. */
+export type SubprocessTerminalEnvironmentMode = 'scrubbed' | 'inherit-user'
+
 /** A fully specified terminal-process spawn. */
 export interface SubprocessTerminalSpawnSpec {
   /** Executable and arguments; `argv[0]` is the program. */
   argv: readonly string[]
   /** Working directory in this subprocess provider's execution world. */
   cwd: string
-  /** Explicit environment layered after the provider's ambient scrub. */
+  /** Explicit environment layered after the provider's ambient environment selection. */
   env?: Record<string, string> | undefined
+  /** Omission or `scrubbed` filters ambient credentials; `inherit-user` keeps them. Both strip ambient `DSH_*` names. */
+  environmentMode?: SubprocessTerminalEnvironmentMode | undefined
   /** Initial terminal row count. */
   rows: number
   /** Initial terminal column count. */

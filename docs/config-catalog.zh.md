@@ -299,11 +299,14 @@ export interface SettingsControllerInternals {
 ## `@deepseek-ai/dsh-api-terminal-controller`
 
 - `inject`: `subprocess` · `sandboxPolicy` · `workingDirectory` · `typert`
-- `source`: [`packages/api/terminal-controller/src/index.ts:27`](../packages/api/terminal-controller/src/index.ts)
+- `refs`: [`SubprocessTerminalEnvironmentMode`](../packages/subprocess/subprocess/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/api/terminal-controller/src/index.ts:28`](../packages/api/terminal-controller/src/index.ts)
 
 ```ts config-catalog
 /** Deployment limits and an optional shell profile. */
 export interface Config {
+  /** Sidebar-only inheritance for new terminals; live updates preserve existing shells. Defaults to `scrubbed`. */
+  readonly environmentMode: Volatile<SubprocessTerminalEnvironmentMode>
   /** Explicit shell profile; omission uses the execution environment's default shell. */
   readonly shell?: {
     /** Executable path or PATH name, verified by the subprocess provider. */
